@@ -1,0 +1,21 @@
+{
+  "name": "quizzers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome extension (Manifest V3) that highlights suggested answers to multiple-choice questions on course platforms using OpenRouter models.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.js",
+    "test:dom": "node --test tests/dom/*.test.js",
+    "test:e2e": "node --test tests/e2e/*.test.js",
+    "test:all": "node --test tests/unit/*.test.js tests/dom/*.test.js tests/e2e/*.test.js",
+    "serve:fixtures": "node scripts/serve-fixtures.js",
+    "icons": "node scripts/make-icons.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

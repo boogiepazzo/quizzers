@@ -1,0 +1,16 @@
+// Loads the extension's classic-script libraries into Node's global scope,
+// the same way importScripts() does in the service worker.
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+const EXT = path.join(__dirname, '..', '..', 'extension');
+
+function loadLib(...files) {
+  for (const file of files) {
+    vm.runInThisContext(fs.readFileSync(path.join(EXT, file), 'utf8'), { filename: file });
+  }
+  return globalThis.QZ;
+}
+
+module.exports = { loadLib, EXT };
