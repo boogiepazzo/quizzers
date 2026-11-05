@@ -4,7 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const EXT = path.join(__dirname, '..', '..', 'extension');
+// QZ_EXT_DIR=edge-extension runs the same suites against the Edge edition.
+const EXT = process.env.QZ_EXT_DIR
+  ? path.resolve(__dirname, '..', '..', process.env.QZ_EXT_DIR)
+  : path.join(__dirname, '..', '..', 'extension');
 
 function loadLib(...files) {
   for (const file of files) {

@@ -10,7 +10,10 @@
     "test:e2e": "node --test tests/e2e/*.test.js",
     "test:all": "node --test tests/unit/*.test.js tests/dom/*.test.js tests/e2e/*.test.js",
     "serve:fixtures": "node scripts/serve-fixtures.js",
-    "icons": "node scripts/make-icons.js"
+    "icons": "node scripts/make-icons.js",
+    "build:edge": "node scripts/build-edge.js",
+    "package:edge": "node scripts/build-edge.js --zip",
+    "test:edge": "QZ_EXT_DIR=edge-extension node --test tests/unit/*.test.js tests/dom/*.test.js tests/e2e/*.test.js"
   },
   "devDependencies": {
     "playwright": "^1.49.0"

@@ -45,7 +45,8 @@ extension/            ← load this folder in Chrome
     ui.js             floating button + results panel (closed shadow DOM)
   icons/
 tests/                unit, DOM and end-to-end tests, plus HTML fixtures
-scripts/              icon generation, local fixture server
+scripts/              icon generation, Edge build, local fixture server
+edge-extension/       generated Microsoft Edge edition (load this folder in Edge)
 ```
 
 ## Load it in Chrome (unpacked)
@@ -63,6 +64,15 @@ scripts/              icon generation, local fixture server
 After editing any file, click the **↻ reload** icon on the Quizzers card in chrome://extensions, then refresh the course tab.
 
 > **About model IDs.** `anthropic/claude-3.5-sonnet` and `google/gemini-flash-1.5` are no longer listed on OpenRouter. The presets use current IDs (for example `google/gemini-2.5-flash`, `anthropic/claude-sonnet-5.5`, `anthropic/claude-haiku-5.5`, `openai/gpt-5.4-mini`). Use **Load all models** to see everything that is available right now.
+
+## Microsoft Edge edition
+
+[`edge-extension/`](edge-extension/) is a standalone Edge build that you can load directly. Edge runs the same Chromium Manifest V3 platform, so the code is shared. Only browser-specific wording differs (`edge://` pages, the Edge Add-ons store, `edge://extensions/shortcuts`), along with the manifest name and description.
+
+- **Load it:** open **edge://extensions**, turn on **Developer mode**, click **Load unpacked** and choose `edge-extension/`. [edge-extension/README.md](edge-extension/README.md) has the full steps.
+- **Don't edit it directly.** It is generated from `extension/` by `node scripts/build-edge.js`, and a unit test fails if it falls out of sync.
+- **Store package:** `npm run package:edge` writes `dist/quizzers-edge-<version>.zip` for Edge Add-ons (Partner Center).
+- **Tests:** `npm run test:edge` runs the unit, DOM and end-to-end suites against the Edge build.
 
 ## Use it
 
