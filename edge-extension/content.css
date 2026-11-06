@@ -1,0 +1,86 @@
+/*
+ * Page-level highlight styles (injected into course pages).
+ * Outlines are used instead of borders so highlighting never shifts layout.
+ */
+
+[data-qz-highlight] {
+  background-color: #e6fffa !important;
+  outline: 2px solid #38a169 !important;
+  outline-offset: 2px !important;
+  border-radius: 4px;
+  color: #1a202c;
+  transition: background-color 0.2s ease, outline-color 0.2s ease;
+}
+
+/* Low-confidence suggestion: same colours, dashed outline. */
+[data-qz-highlight='low'] {
+  outline-style: dashed !important;
+}
+
+/* Select-all option the model is unsure about. */
+[data-qz-highlight='maybe'] {
+  background-color: #fefcbf !important;
+  outline: 2px dashed #b7791f !important;
+}
+
+/* Short-answer field holding an editable Quizzers draft. */
+input[data-qz-highlight='filled'],
+textarea[data-qz-highlight='filled'],
+input[data-qz-highlight='suggested'],
+textarea[data-qz-highlight='suggested'] {
+  background-color: #e6fffa !important;
+  outline: 2px solid #38a169 !important;
+  outline-offset: 1px !important;
+}
+
+input[data-qz-highlight='suggested'],
+textarea[data-qz-highlight='suggested'] {
+  background-color: inherit !important;
+  outline-style: dashed !important;
+}
+
+/* Bare radio/checkbox inputs only get the outline. */
+input[data-qz-highlight] {
+  outline-offset: 1px !important;
+}
+
+/* Inside a <select> popup (honoured on Windows/Linux). */
+option[data-qz-highlight] {
+  outline: none !important;
+  font-weight: 600;
+}
+
+/* Options that are plain text runs (CSS Custom Highlight API). */
+::highlight(qz-correct),
+::highlight(qz-correct-low) {
+  background-color: #c6f6d5;
+  color: #1a202c;
+}
+
+::highlight(qz-correct-low) {
+  text-decoration: underline dashed #38a169;
+}
+
+/* Brief pulse when a question is selected in the Quizzers panel. */
+[data-qz-flash] {
+  animation: qz-flash 0.9s ease-out 2 !important;
+}
+
+@keyframes qz-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(56, 161, 105, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(56, 161, 105, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-qz-highlight] {
+    transition: none;
+  }
+  [data-qz-flash] {
+    animation: none !important;
+    box-shadow: 0 0 0 3px rgba(56, 161, 105, 0.55) !important;
+  }
+}

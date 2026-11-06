@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quizzers settings</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="brand">
+        <img src="icons/icon48.png" alt="" width="32" height="32" />
+        <div>
+          <h1>Quizzers</h1>
+          <p>Highlights suggested answers to multiple-choice questions</p>
+        </div>
+      </header>
+
+      <section class="card" id="scan-card" aria-labelledby="scan-title">
+        <h2 id="scan-title" class="visually-hidden">Scan</h2>
+        <button type="button" id="scan-btn" class="btn primary wide">Scan this tab</button>
+        <p id="scan-status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <form id="settings-form" class="card" novalidate>
+        <h2>Settings</h2>
+
+        <div class="field">
+          <label for="api-key">OpenRouter API key</label>
+          <div class="input-row">
+            <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-or-v1-…" />
+            <button type="button" id="toggle-key" class="btn" aria-pressed="false" aria-controls="api-key">Show</button>
+          </div>
+          <p class="hint">
+            Stored only in this browser (chrome.storage.local) and sent only to openrouter.ai.
+            <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">Get a key</a>
+          </p>
+        </div>
+
+        <div class="field">
+          <label for="model">Model</label>
+          <select id="model"></select>
+          <input id="custom-model" type="text" spellcheck="false" placeholder="vendor/model-id, e.g. openai/gpt-5.4-mini" hidden aria-label="Custom model ID" />
+          <p class="hint">
+            <button type="button" id="load-models" class="link">Load all models from OpenRouter</button>
+            <span id="models-status"></span>
+          </p>
+        </div>
+
+        <fieldset class="field">
+          <legend>Scan scope</legend>
+          <label class="choice"><input type="radio" name="scope" value="page" /> Whole page (visible elements only)</label>
+          <label class="choice"><input type="radio" name="scope" value="viewport" /> Only what's on screen right now</label>
+        </fieldset>
+
+        <label class="choice">
+          <input type="checkbox" id="fill-text" />
+          Fill short free-text answers with an editable draft
+        </label>
+
+        <label class="choice">
+          <input type="checkbox" id="show-button" />
+          Show the floating button on course sites
+        </label>
+
+        <div class="actions">
+          <button type="submit" class="btn primary">Save</button>
+          <button type="button" id="test-key" class="btn">Test key</button>
+        </div>
+        <p id="settings-status" class="status" role="status" aria-live="polite"></p>
+      </form>
+
+      <footer class="foot">
+        Quizzers highlights choices and drafts short text answers for you to edit — it never
+        clicks, selects or submits. CAPTCHAs and hidden bot-trap fields are ignored.
+        <span id="shortcut"></span>
+      </footer>
+    </main>
+    <script src="lib/config.js"></script>
+    <script src="lib/settings.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

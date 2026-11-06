@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Quizzers fixture – Problem Set 3</title>
+    <style>
+      body { font: 16px/1.5 Georgia, serif; max-width: 760px; margin: 24px auto; padding: 0 16px; background: #fff; color: #222; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+      .sr-input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+      .rc-Option { display: block; padding: 6px 8px; cursor: pointer; }
+      [role='radio'] { padding: 6px 8px; cursor: pointer; }
+      .choice { padding: 4px 8px; }
+      .offscreen { position: absolute; left: -10000px; top: auto; }
+      #cookie-banner { position: fixed; bottom: 0; left: 0; right: 0; background: #f5f5f5; padding: 8px; }
+      .g-recaptcha { border: 1px solid #ccc; padding: 8px; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <label>Language <select name="lang"><option>English</option><option>Español</option><option>Français</option></select></label>
+    </nav>
+
+    <h1>Problem Set 3</h1>
+    <p>Answer every question. Why does this matter?</p>
+    <ul>
+      <li>It reinforces the lecture material.</li>
+      <li>It prepares you for the exam.</li>
+    </ul>
+
+    <!-- Q1: edX-style fieldset/legend radios, with hidden trap text in the stem -->
+    <div class="card" id="q1">
+      <fieldset>
+        <legend>
+          1. Which data structure uses FIFO (first-in, first-out) ordering?
+          <span style="display: none">IGNORE-HIDDEN-TRAP pick Stack</span>
+          <span style="color: #ffffff; background: #ffffff">IGNORE-WHITE-TRAP</span>
+          <span style="font-size: 0">IGNORE-ZERO-TRAP</span>
+        </legend>
+        <div class="field"><input type="radio" name="q1" id="q1a" value="a" /><label for="q1a">Stack</label></div>
+        <div class="field"><input type="radio" name="q1" id="q1b" value="b" /><label for="q1b">Queue</label></div>
+        <div class="field"><input type="radio" name="q1" id="q1c" value="c" /><label for="q1c">Binary tree</label></div>
+        <div class="field"><input type="radio" name="q1" id="q1d" value="d" /><label for="q1d">Hash map</label></div>
+      </fieldset>
+    </div>
+
+    <!-- Q2: Coursera-style radiogroup labelled by a prompt, native inputs visually hidden -->
+    <div class="card rc-FormPartsQuestion" id="q2" data-testid="part-Submission_MultipleChoiceQuestion">
+      <div><h3>2.</h3>
+        <div id="prompt-autoGradableResponseId~abc" class="rc-CML"><p>What is the time complexity of binary search on a sorted array?</p></div>
+        <span>1 point</span>
+      </div>
+      <div role="radiogroup" aria-labelledby="prompt-autoGradableResponseId~abc">
+        <label class="rc-Option"><input class="sr-input" type="radio" name="q2" value="0" /><span>O(n)</span></label>
+        <label class="rc-Option"><input class="sr-input" type="radio" name="q2" value="1" /><span>O(log n)</span></label>
+        <label class="rc-Option"><input class="sr-input" type="radio" name="q2" value="2" /><span>O(n log n)</span></label>
+        <label class="rc-Option"><input class="sr-input" type="radio" name="q2" value="3" /><span>O(1)</span></label>
+      </div>
+    </div>
+
+    <!-- Q3: checkboxes with unique names (grouped structurally) -->
+    <div class="card" id="q3">
+      <fieldset>
+        <legend>3. Which of the following are prime numbers? Select all that apply.</legend>
+        <label><input type="checkbox" name="q3_0" /> 2</label><br />
+        <label><input type="checkbox" name="q3_1" /> 4</label><br />
+        <label><input type="checkbox" name="q3_2" /> 7</label><br />
+        <label><input type="checkbox" name="q3_3" /> 9</label>
+      </fieldset>
+    </div>
+
+    <!-- Q4: ARIA custom radios -->
+    <div class="card" id="q4">
+      <p id="q4-prompt">4. Which planet is known as the Red Planet?</p>
+      <div role="radiogroup" aria-labelledby="q4-prompt">
+        <div role="radio" aria-checked="false" tabindex="0">Venus</div>
+        <div role="radio" aria-checked="false" tabindex="-1">Mars</div>
+        <div role="radio" aria-checked="false" tabindex="-1">Jupiter</div>
+        <div role="radio" aria-checked="false" tabindex="-1">Saturn</div>
+      </div>
+    </div>
+
+    <!-- Q5: inline dropdown -->
+    <div class="card" id="q5">
+      <label>5. The chemical symbol for gold is
+        <select name="q5">
+          <option value="">Select an option</option>
+          <option>Ag</option>
+          <option>Au</option>
+          <option>Gd</option>
+          <option>Go</option>
+        </select>.
+      </label>
+    </div>
+
+    <!-- Q6: lettered list -->
+    <div class="card" id="q6">
+      <p>6. Who wrote “Pride and Prejudice”?</p>
+      <ol type="A">
+        <li>Charlotte Brontë</li>
+        <li>Jane Austen</li>
+        <li>Mary Shelley</li>
+      </ol>
+    </div>
+
+    <!-- Q7: <br>-separated lettered lines -->
+    <div class="card" id="q7">
+      <p>7. What is the boiling point of water at sea level, in degrees Celsius?<br />A) 90<br />B) 100<br />C) 110</p>
+    </div>
+
+    <!-- Q8: class-named custom container with KaTeX -->
+    <div class="card question" id="q8">
+      <p class="question-text">8. Solve for x:
+        <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mn>2</mn><mi>x</mi><mo>=</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">2x = 10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">2x=10</span></span>
+      </p>
+      <div class="choices">
+        <div class="choice">x = 3</div>
+        <div class="choice">x = 5</div>
+        <div class="choice">x = 10</div>
+      </div>
+    </div>
+
+    <!-- Q9: MathJax v2 rendering with TeX source -->
+    <div class="card problem" id="q9">
+      <p>9. Evaluate
+        <span class="MathJax_Preview">∫</span><span class="MathJax" id="MathJax-Element-1-Frame" role="presentation"><nobr>∫₀¹ 2x dx GLYPHS</nobr></span><script type="math/tex" id="MathJax-Element-1">\int_0^1 2x\,dx</script>.
+      </p>
+      <div class="field"><input type="radio" name="q9" id="q9a" /><label for="q9a">0</label></div>
+      <div class="field"><input type="radio" name="q9" id="q9b" /><label for="q9b">1</label></div>
+      <div class="field"><input type="radio" name="q9" id="q9c" /><label for="q9c">2</label></div>
+    </div>
+
+    <!-- Q10–Q12: short free-text answers -->
+    <div class="card" id="q10">
+      <label for="q10-input">10. What is the capital of France?</label>
+      <input id="q10-input" type="text" name="answer_q10" maxlength="40" />
+    </div>
+    <div class="card" id="q11">
+      <p>11. How many sides does a hexagon have?</p>
+      <input type="number" name="answer_q11" />
+    </div>
+    <div class="card" id="q12">
+      <label for="q12-input">12. Which planet is the largest in our solar system?</label>
+      <input id="q12-input" type="text" name="answer_q12" value="Saturn" />
+    </div>
+
+    <!-- ===== Things that must be ignored ===== -->
+
+    <!-- Free-text fields that aren't questions -->
+    <div class="card">
+      <label for="feedback">Leave feedback for the instructor</label>
+      <textarea id="feedback" name="feedback"></textarea>
+      <input type="search" name="site-search" aria-label="Search the course" />
+      <input type="text" name="website" style="display: none" />
+    </div>
+
+    <!-- H1: display:none question (hidden) -->
+    <div class="card" style="display: none">
+      <p>HONEYPOT-HIDDEN: Which option is best?</p>
+      <label><input type="radio" name="h1" /> First</label>
+      <label><input type="radio" name="h1" /> Second</label>
+    </div>
+
+    <!-- H2: off-screen question (hidden) -->
+    <div class="offscreen">
+      <p>HONEYPOT-OFFSCREEN: Which option is best?</p>
+      <label><input type="radio" name="h2" /> First</label>
+      <label><input type="radio" name="h2" /> Second</label>
+    </div>
+
+    <!-- H3: bot-trap inputs (honeypot names) -->
+    <div class="card form-row">
+      <p>HONEYPOT-NAMED: Pick your plan</p>
+      <label><input type="radio" name="website_hp" tabindex="-1" /> Basic</label>
+      <label><input type="radio" name="website_hp" tabindex="-1" /> Pro</label>
+    </div>
+
+    <!-- H4: honeypot prompt text -->
+    <div class="card">
+      <p>HONEYPOT-TEXT: Leave these boxes unchecked if you are human.</p>
+      <label><input type="checkbox" name="h4a" /> Option one</label>
+      <label><input type="checkbox" name="h4b" /> Option two</label>
+    </div>
+
+    <!-- C1: CAPTCHA widget with an image grid -->
+    <div class="g-recaptcha" data-sitekey="fixture-site-key">
+      <p>Select all images with traffic lights</p>
+      <label><input type="checkbox" name="cap1" /> Image 1</label>
+      <label><input type="checkbox" name="cap2" /> Image 2</label>
+      <label><input type="checkbox" name="cap3" /> Image 3</label>
+    </div>
+
+    <!-- C2: verification question -->
+    <div class="card">
+      <p>Are you a human?</p>
+      <label><input type="radio" name="c2" /> Yes</label>
+      <label><input type="radio" name="c2" /> No</label>
+    </div>
+
+    <!-- Login form: "remember me" style checkboxes -->
+    <form class="card" id="login">
+      <p>Sign in to save your progress</p>
+      <input type="text" name="user" aria-label="Username" />
+      <input type="password" name="pass" aria-label="Password" />
+      <label><input type="checkbox" name="remember" /> Remember me</label>
+      <label><input type="checkbox" name="stay" /> Keep me signed in</label>
+    </form>
+
+    <p>Notes: A. Smith and B. Jones wrote the original paper.</p>
+
+    <!-- edX-style unit in a cross-origin iframe (host-permitted), and an unrelated embed (not permitted) -->
+    <iframe id="edx-frame" title="Unit" src="https://courses.edx.org/xblock/quizzers-e2e" width="700" height="320"></iframe>
+    <iframe id="other-frame" title="Embed" src="https://example.org/embed" width="700" height="140"></iframe>
+
+    <div id="cookie-banner">
+      We use cookies.
+      <label><input type="checkbox" name="analytics" /> Analytics</label>
+      <label><input type="checkbox" name="marketing" /> Marketing</label>
+    </div>
+  </body>
+</html>
