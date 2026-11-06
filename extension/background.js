@@ -18,11 +18,11 @@ const inflight = new Map();
 /* ---------- per-frame functions (serialized into the page) ---------- */
 // These run in the content scripts' isolated world, so they can reach QZ.app.
 
-function frameCollect(opts) {
+async function frameCollect(opts) {
   const app = globalThis.QZ && globalThis.QZ.app;
   if (!app) return null;
   try {
-    return app.collect(opts);
+    return await app.collect(opts);
   } catch (err) {
     return { error: String((err && err.message) || err) };
   }
@@ -108,6 +108,135 @@ async function collectFrames(tabId, scope) {
   return { frames, failures };
 }
 
+/* ---------- answer cache (chrome.storage.session) ---------- */
+// Keyed by a hash of model + question + options, so a rescan (e.g. after more
+// of the page loaded) only sends questions that haven't been answered yet.
+
+const CACHE_KEY = 'answerCache';
+
+async function fingerprint(model, q) {
+  const raw = JSON.stringify([model, q.type, q.stem, q.context || '', q.options, q.constraints || null]);
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function loadCache() {
+  try {
+    return (await chrome.storage.session.get(CACHE_KEY))[CACHE_KEY] || {};
+  } catch {
+    return {};
+  }
+}
+
+async function saveToCache(batch, answers, fingerprints) {
+  const cache = await loadCache();
+  const now = Date.now();
+  for (const q of batch) {
+    const a = answers.get(q.id);
+    const usable = a && (q.type === 'text' ? a.text : a.indices.length);
+    if (usable) cache[fingerprints.get(q.id)] = { a, t: now };
+  }
+  const entries = Object.entries(cache).sort((x, y) => y[1].t - x[1].t).slice(0, LIMITS.CACHE_ENTRIES);
+  await chrome.storage.session.set({ [CACHE_KEY]: Object.fromEntries(entries) }).catch(() => {});
+}
+
+/* ---------- completeness ---------- */
+
+/**
+ * Compares what was found with what the page implies: "Question N of M"
+ * counters, gaps in question numbering, frames that couldn't be read, and a
+ * page that was still changing when the scan ran.
+ */
+function completenessReport(frames, questions, scope) {
+  const numbers = new Set(frames.flatMap((f) => f.completeness?.numbers || []));
+  const declared = Math.max(0, ...frames.map((f) => f.completeness?.declaredTotal || 0)) || null;
+  const numbered = numbers.size >= 3; // numbering only counts as evidence when most questions carry it
+  const expected = Math.max(declared || 0, numbered ? Math.max(...numbers) : 0) || null;
+  let missingNumbers = [];
+  if (expected && numbered) {
+    for (let n = 1; n <= expected && missingNumbers.length < 50; n++) if (!numbers.has(n)) missingNumbers.push(n);
+  }
+  const missingCount = numbered ? missingNumbers.length : declared ? Math.max(0, declared - questions.length) : 0;
+  const childFrames = frames.reduce((sum, f) => sum + (f.completeness?.childFrames || 0), 0);
+  const inaccessibleFrames = Math.max(0, childFrames - (frames.length - 1));
+  const unstable = frames.some((f) => f.completeness && !f.completeness.stable);
+
+  const notes = [];
+  if (scope !== 'viewport' && missingCount) {
+    const which = missingNumbers.length ? ` (${missingNumbers.slice(0, 10).join(', ')}${missingNumbers.length > 10 ? '…' : ''})` : '';
+    notes.push(`The page suggests ${expected} questions but ${missingCount} weren’t found${which}. They may not be loaded yet, be on another page, or use an unsupported layout.`);
+  }
+  if (inaccessibleFrames) notes.push(`${inaccessibleFrames} embedded frame${inaccessibleFrames === 1 ? '' : 's'} couldn’t be scanned (different website).`);
+  if (unstable) notes.push('The page was still changing during the scan — scan again once it has finished loading.');
+  return {
+    expected,
+    found: questions.length,
+    missingNumbers,
+    missingCount,
+    inaccessibleFrames,
+    unstable,
+    complete: !notes.length,
+    notes,
+  };
+}
+
+/** Records answers on results and paints them in the frames that own the questions. */
+async function applyAnswers(tabId, batch, answers, results, settings, { cached = false } = {}) {
+  const perDocument = new Map();
+  for (const q of batch) {
+    const r = results[q.num - 1];
+    const answer = answers.get(q.id);
+    if (!answer) {
+      r.status = 'missing';
+      continue;
+    }
+    Object.assign(r, {
+      indices: answer.indices,
+      confidence: answer.confidence,
+      reasoning: answer.reasoning,
+      rawTexts: answer.rawTexts,
+      uncertain: answer.uncertain,
+      text: answer.text,
+      cached,
+    });
+    if (q.type === 'text' ? !answer.text : !answer.indices.length) {
+      r.status = q.type === 'text' ? 'missing' : 'unmatched';
+      continue;
+    }
+    const key = q.documentId || `frame:${q.frameId}`;
+    if (!perDocument.has(key)) perDocument.set(key, { frameId: q.frameId, documentId: q.documentId, token: q.token, items: [] });
+    perDocument.get(key).items.push({
+      localId: q.localId,
+      indices: answer.indices,
+      confidence: answer.confidence,
+      reasoning: answer.reasoning,
+      optionTexts: q.options,
+      uncertain: answer.uncertain,
+      text: answer.text,
+      fillText: settings.fillTextAnswers,
+    });
+  }
+
+  for (const doc of perDocument.values()) {
+    const target = doc.documentId ? { tabId, documentIds: [doc.documentId] } : { tabId, frameIds: [doc.frameId] };
+    let applied = [];
+    try {
+      const [res] = await chrome.scripting.executeScript({ target, func: frameHighlight, args: [doc.token, doc.items] });
+      applied = res?.result || [];
+    } catch {
+      applied = []; // frame navigated away
+    }
+    const byLocal = new Map(applied.map((a) => [a.localId, a]));
+    for (const item of doc.items) {
+      const r = results.find((x) => x.localId === item.localId && (x.documentId || `frame:${x.frameId}`) === (doc.documentId || `frame:${doc.frameId}`));
+      if (!r) continue;
+      const outcome = byLocal.get(item.localId);
+      r.status = outcome?.applied ? 'highlighted' : 'stale';
+      if (outcome?.outcome) r.textOutcome = outcome.outcome; // filled | not-empty | suggested
+    }
+  }
+}
+
 /* ---------- scanning ---------- */
 
 async function runScan(tabId, signal) {
@@ -169,25 +298,39 @@ async function runScan(tabId, signal) {
   if (!questions.length) {
     const message =
       'No visible multiple-choice questions found. Questions shown as images, or still loading, can’t be read — scroll to them or wait, then scan again.';
-    const state = { phase: 'done', results, skipped, model: settings.model, message };
+    const state = { phase: 'done', results, skipped, model: settings.model, message, completeness: completenessReport(frames, questions, settings.scanScope) };
     pushState(tabId, state);
     setBadge(tabId, '0', '#718096');
     return { found: 0, highlighted: 0, skipped };
   }
 
   const pageTitle = top?.title || '';
-  const batches = chunk(questions, LIMITS.BATCH_SIZE);
+  const completeness = completenessReport(frames, questions, settings.scanScope);
   let modelUsed = settings.model;
 
+  // Reuse answers from earlier scans: only unseen questions cost an API call.
+  const fingerprints = new Map(await Promise.all(questions.map(async (q) => [q.id, await fingerprint(settings.model, q)])));
+  const cache = await loadCache();
+  const cachedAnswers = new Map();
+  for (const q of questions) {
+    const hit = cache[fingerprints.get(q.id)];
+    if (hit) cachedAnswers.set(q.id, hit.a);
+  }
+  const pending = questions.filter((q) => !cachedAnswers.has(q.id));
+  if (cachedAnswers.size) {
+    await applyAnswers(tabId, questions.filter((q) => cachedAnswers.has(q.id)), cachedAnswers, results, settings, { cached: true });
+  }
+
+  const batches = chunk(pending, LIMITS.BATCH_SIZE);
   for (let b = 0; b < batches.length; b++) {
-    pushState(tabId, { phase: 'solving', model: settings.model, total: questions.length, batch: b + 1, batches: batches.length, results, skipped });
+    pushState(tabId, { phase: 'solving', model: settings.model, total: pending.length, reused: cachedAnswers.size, batch: b + 1, batches: batches.length, results, skipped, completeness });
 
     let solved;
     try {
       solved = await client.solveBatch(batches[b], { apiKey: settings.apiKey, model: settings.model, pageTitle, signal });
     } catch (err) {
-      // Keep earlier batches' highlights; report the failure for the rest.
-      if (b === 0) throw err;
+      // Keep earlier highlights; report the failure for the rest.
+      if (b === 0 && !cachedAnswers.size) throw err;
       const plain = toPlain(err);
       for (const q of batches.slice(b).flat()) {
         const r = results[q.num - 1];
@@ -199,64 +342,24 @@ async function runScan(tabId, signal) {
     }
     if (signal.aborted) throw new QZError('ABORTED'); // cleared mid-scan: don't repaint
     modelUsed = solved.model || modelUsed;
-
-    // Record answers, then highlight per document.
-    const perDocument = new Map();
-    for (const q of batches[b]) {
-      const r = results[q.num - 1];
-      const answer = solved.answers.get(q.id);
-      if (!answer) {
-        r.status = 'missing';
-        continue;
-      }
-      r.indices = answer.indices;
-      r.confidence = answer.confidence;
-      r.reasoning = answer.reasoning;
-      r.rawTexts = answer.rawTexts;
-      r.uncertain = answer.uncertain;
-      r.text = answer.text;
-      if (q.type === 'text' ? !answer.text : !answer.indices.length) {
-        r.status = q.type === 'text' ? 'missing' : 'unmatched';
-        continue;
-      }
-      const key = q.documentId || `frame:${q.frameId}`;
-      if (!perDocument.has(key)) perDocument.set(key, { frameId: q.frameId, documentId: q.documentId, token: q.token, items: [] });
-      perDocument.get(key).items.push({
-        localId: q.localId,
-        indices: answer.indices,
-        confidence: answer.confidence,
-        reasoning: answer.reasoning,
-        optionTexts: q.options,
-        uncertain: answer.uncertain,
-        text: answer.text,
-        fillText: settings.fillTextAnswers,
-      });
-    }
-
-    for (const doc of perDocument.values()) {
-      const target = doc.documentId ? { tabId, documentIds: [doc.documentId] } : { tabId, frameIds: [doc.frameId] };
-      let applied = [];
-      try {
-        const [res] = await chrome.scripting.executeScript({ target, func: frameHighlight, args: [doc.token, doc.items] });
-        applied = res?.result || [];
-      } catch {
-        applied = []; // frame navigated away
-      }
-      const byLocal = new Map(applied.map((a) => [a.localId, a]));
-      for (const item of doc.items) {
-        const r = results.find((x) => x.localId === item.localId && (x.documentId || `frame:${x.frameId}`) === (doc.documentId || `frame:${doc.frameId}`));
-        if (!r) continue;
-        const outcome = byLocal.get(item.localId);
-        r.status = outcome?.applied ? 'highlighted' : 'stale';
-        if (outcome?.outcome) r.textOutcome = outcome.outcome; // filled | not-empty | suggested
-      }
-    }
+    await saveToCache(batches[b], solved.answers, fingerprints);
+    await applyAnswers(tabId, batches[b], solved.answers, results, settings);
   }
 
   const highlighted = results.filter((r) => r.status === 'highlighted').length;
-  pushState(tabId, { phase: 'done', model: modelUsed, results, skipped, warning, durationMs: Date.now() - started });
+  pushState(tabId, {
+    phase: 'done',
+    model: modelUsed,
+    results,
+    skipped,
+    warning,
+    completeness,
+    reused: cachedAnswers.size,
+    sent: pending.length,
+    durationMs: Date.now() - started,
+  });
   setBadge(tabId, String(highlighted), '#2f855a');
-  return { found: questions.length, highlighted, skipped, warning };
+  return { found: questions.length, highlighted, skipped, warning, completeness, reused: cachedAnswers.size, sent: pending.length };
 }
 
 function scanTab(tabId) {
@@ -286,6 +389,8 @@ function cancelScan(tabId) {
 async function clearTab(tabId) {
   cancelScan(tabId);
   await execute({ tabId, allFrames: true }, frameClear).catch(() => {});
+  // "Clear" also forgets cached answers, so the next scan asks the model afresh.
+  await chrome.storage.session.remove(CACHE_KEY).catch(() => {});
   setBadge(tabId, '');
   return true;
 }

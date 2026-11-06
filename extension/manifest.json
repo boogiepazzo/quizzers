@@ -1,11 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Quizzers – MCQ Answer Highlighter",
+  "name": "Quizzers \u2013 MCQ Answer Highlighter",
   "short_name": "Quizzers",
   "version": "1.0.0",
   "description": "Finds visible multiple-choice questions on course pages, asks an OpenRouter model, and highlights the suggested answer. Never clicks for you.",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
   "host_permissions": [
     "https://openrouter.ai/*",
     "https://ocw.mit.edu/*",
@@ -33,11 +37,14 @@
         "content/guards.js",
         "content/text.js",
         "content/parser.js",
+        "content/completeness.js",
         "content/highlighter.js",
         "content/ui.js",
         "content.js"
       ],
-      "css": ["content.css"],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle",
       "all_frames": true
     }

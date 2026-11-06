@@ -332,14 +332,19 @@
       line('Scanning the page for visible questions…', true);
     } else if (s.phase === 'solving') {
       const batch = s.batches > 1 ? ` (batch ${s.batch} of ${s.batches})` : '';
-      line(`Found ${s.total} question${s.total === 1 ? '' : 's'}. Asking ${s.model}${batch}…`, true);
+      const reused = s.reused ? ` (${s.reused} reused from earlier scans)` : '';
+      line(`Asking ${s.model} about ${s.total} new question${s.total === 1 ? '' : 's'}${reused}${batch}…`, true);
     } else if (s.phase === 'done') {
       const total = s.results?.length || 0;
       const highlighted = (s.results || []).filter((r) => r.status === 'highlighted').length;
       line(total ? `Answered ${highlighted} of ${total} question${total === 1 ? '' : 's'}.` : s.message || 'No visible multiple-choice questions found.');
-      if (s.warning) {
+      if (total && s.reused) {
+        box.append(h('div', 'note', s.sent ? `${s.reused} answer${s.reused === 1 ? '' : 's'} reused, ${s.sent} sent to the model.` : 'All answers reused from earlier scans — no API call made.'));
+      }
+      const notes = [s.warning, ...(s.completeness?.notes || [])].filter(Boolean);
+      if (notes.length) {
         box.dataset.kind = 'warn';
-        box.append(h('div', 'note', s.warning));
+        for (const n of notes) box.append(h('div', 'note', n));
       }
     } else if (s.phase === 'error') {
       box.dataset.kind = 'error';

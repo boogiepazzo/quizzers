@@ -71,6 +71,33 @@ test('clicking the floating button highlights answers across frames — and neve
   assert.equal(await badgeText(sw, 'https://ocw.mit.edu/*'), '13');
   assert.deepEqual(errors, []);
 
+  // A rescan reuses cached answers: no new API call, highlights restored.
+  const rescan = await scanFromWorker(sw, 'https://ocw.mit.edu/*');
+  assert.equal(rescan.result.reused, 13);
+  assert.equal(rescan.result.sent, 0);
+  assert.equal((await requests(sw)).length, 2, 'no API call for an unchanged page');
+  assert.deepEqual(await highlighted(page), EXPECTED_TOP);
+  // Completeness: the example.org frame can't be scanned and is reported.
+  assert.equal(rescan.result.completeness.inaccessibleFrames, 1);
+  assert.equal(rescan.result.completeness.missingCount, 0);
+
+  // More content appears (lazy loading): only the new question is sent.
+  await page.evaluate(() => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = '<fieldset><legend>14. What colour is a clear daytime sky?</legend>' +
+      '<label><input type="radio" name="q14"> Blue</label><label><input type="radio" name="q14"> Green</label></fieldset>';
+    document.getElementById('q12').after(card);
+  });
+  const incremental = await scanFromWorker(sw, 'https://ocw.mit.edu/*');
+  assert.equal(incremental.result.found, 14);
+  assert.equal(incremental.result.sent, 1);
+  const third = (await requests(sw))[2];
+  const newlySent = JSON.parse(third.body.messages[1].content.slice(third.body.messages[1].content.indexOf('{'))).questions;
+  assert.deepEqual(newlySent.map((q) => q.question), ['14. What colour is a clear daytime sky?']);
+  // Questions are now numbered 1–12 and 14 (plus the edX frame's 10), so 13 is reported missing.
+  assert.deepEqual(incremental.result.completeness.missingNumbers, [13]);
+
   // Clearing removes highlights in every frame.
   await sw.evaluate(async () => {
     const [tab] = await chrome.tabs.query({ url: 'https://ocw.mit.edu/*' });

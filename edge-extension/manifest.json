@@ -37,6 +37,7 @@
         "content/guards.js",
         "content/text.js",
         "content/parser.js",
+        "content/completeness.js",
         "content/highlighter.js",
         "content/ui.js",
         "content.js"

@@ -8,7 +8,7 @@ const { chromium } = require('playwright');
 const { EXT } = require('../helpers/load-lib');
 
 const FIXTURES = path.join(__dirname, '..', 'fixtures');
-const CONTENT_LIBS = ['lib/config.js', 'lib/errors.js', 'content/guards.js', 'content/text.js', 'content/parser.js', 'content/highlighter.js'];
+const CONTENT_LIBS = ['lib/config.js', 'lib/errors.js', 'content/guards.js', 'content/text.js', 'content/parser.js', 'content/completeness.js', 'content/highlighter.js'];
 
 let browser;
 test.before(async () => {
@@ -184,4 +184,42 @@ test('fillText drafts only empty fields, notifies the page, and Clear removes un
   assert.equal(r.events, 1);
   assert.deepEqual(r.afterClear, ['', 'Saturn']);
   assert.equal(r.afterEdit, 'Paris, France', 'user edits are never reverted');
+});
+
+test('waitForStable lets late-rendering questions appear before parsing', async () => {
+  const page = await open(`<!doctype html><body><div class="spinner" style="width:20px;height:20px">loading</div><div id="quiz"></div>
+    <script>setTimeout(() => {
+      document.getElementById('quiz').innerHTML = '<fieldset><legend>1. Which gas do plants absorb?</legend>' +
+        '<label><input type="radio" name="g"> Oxygen</label><label><input type="radio" name="g"> Carbon dioxide</label></fieldset>';
+      document.querySelector('.spinner').remove();
+    }, 700);</script></body>`);
+  const r = await page.evaluate(async () => {
+    const before = globalThis.QZ.parser.findQuestions({}).questions.length;
+    const settle = await globalThis.QZ.completeness.waitForStable({ quietMs: 200, timeoutMs: 4000 });
+    return { before, settle, after: globalThis.QZ.parser.findQuestions({}).questions.length };
+  });
+  await page.close();
+  assert.equal(r.before, 0);
+  assert.equal(r.settle.stable, true);
+  assert.ok(r.settle.waitedMs >= 600, `waited ${r.settle.waitedMs}ms`);
+  assert.equal(r.after, 1);
+});
+
+test('waitForStable gives up on a page that never settles', async () => {
+  const page = await open(`<!doctype html><body><p id="t">0</p><script>setInterval(() => { t.textContent = Date.now(); }, 50);</script></body>`);
+  const settle = await page.evaluate(() => globalThis.QZ.completeness.waitForStable({ quietMs: 200, timeoutMs: 800 }));
+  await page.close();
+  assert.equal(settle.stable, false);
+});
+
+test('assess reads "Question N of M" counters, numbering and frames', async () => {
+  const page = await open(`<!doctype html><body><p>Question 1 of 5</p>
+    ${[1, 2, 4].map((n) => `<fieldset><legend>${n}. Which is item ${n}?</legend><label><input type="radio" name="q${n}"> Yes</label><label><input type="radio" name="q${n}"> No</label></fieldset>`).join('')}
+    <iframe src="https://example.org/x" width="200" height="100"></iframe></body>`);
+  const r = await page.evaluate(() => {
+    const qs = globalThis.QZ.parser.findQuestions({}).questions;
+    return globalThis.QZ.completeness.assess(qs);
+  });
+  await page.close();
+  assert.deepEqual(r, { numbers: [1, 2, 4], declaredTotal: 5, childFrames: 1 });
 });

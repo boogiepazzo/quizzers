@@ -19,13 +19,15 @@
 
   const app = {
     /** Parses this frame. Returns serializable data only. */
-    collect(opts = {}) {
+    async collect(opts = {}) {
       QZ.highlighter.clear();
       const token = `${Date.now().toString(36)}-${++scanSeq}`;
       if (inCaptchaFrame) {
         lastScan = { token, entries: [] };
         return { token, isTop, blocked: 'captcha-frame', skipped: { captcha: 1 }, questions: [], title: '' };
       }
+      // Let still-rendering content settle so the scan sees the whole page.
+      const settle = opts.waitForStable === false ? { stable: true, waitedMs: 0 } : await QZ.completeness.waitForStable(opts.stability);
       const result = QZ.parser.findQuestions(opts);
       lastScan = { token, entries: result.entries };
       return {
@@ -34,6 +36,7 @@
         blocked: result.blocked,
         skipped: result.skipped,
         questions: result.questions,
+        completeness: { ...QZ.completeness.assess(result.questions), stable: settle.stable, waitedMs: settle.waitedMs },
         title: isTop ? document.title : '',
       };
     },

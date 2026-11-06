@@ -21,6 +21,11 @@ For choice questions it only highlights. For short free-text questions it fills 
   - Drafts get a green outline and can be edited freely. **Clear highlights** removes drafts you haven't edited.
   - Personal-data fields (name, email, search, address, password forms…) and comment boxes that don't read as questions are never touched.
   - Turn this off with "Fill short free-text answers" in settings to get a highlight-only suggestion instead.
+- **Completeness check.** Before parsing, each frame waits (up to 4 s) for the page to stop changing and for loading spinners to disappear, so content that is still rendering isn't missed. After the scan, the panel reports:
+  - gaps in question numbering, or a shortfall against "Question N of M" counters (e.g. "The page suggests 14 questions but 1 wasn't found (13)");
+  - embedded frames from other sites that couldn't be scanned;
+  - pages that were still changing during the scan.
+- **No needless API calls.** Answers are cached for the browser session, keyed by model, question and options. Rescanning an unchanged page makes no API call. After more of the page loads, only the new questions are sent. **Clear highlights** also clears the cache, so you can force fresh answers. Up to 150 questions per scan are supported.
 - **Readable math.** TeX is recovered from MathJax v2/v3, KaTeX and MathML, and image `alt` text is kept.
 - **Iframes.** Questions inside frames (for example edX units) are gathered into the same request.
 - **Anti-bot and verification guardrails.** CAPTCHA frames and widgets, bot-challenge pages, honeypot inputs, "leave this blank" prompts and hidden text are detected and never sent to the API (see [Guardrails](#guardrails)).

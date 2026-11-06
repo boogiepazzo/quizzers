@@ -42,7 +42,7 @@
     }),
 
     LIMITS: Object.freeze({
-      MAX_QUESTIONS: 60, // per scan, across all frames
+      MAX_QUESTIONS: 150, // per scan, across all frames (cached answers don't count against the API)
       BATCH_SIZE: 12, // questions per API request
       STEM_CHARS: 1500,
       CONTEXT_CHARS: 1200,
@@ -50,6 +50,7 @@
       MAX_OPTIONS: 12,
       REQUEST_TIMEOUT_MS: 90_000,
       MAX_RETRIES: 2,
+      CACHE_ENTRIES: 500, // remembered answers (chrome.storage.session)
     }),
   });
 })();
