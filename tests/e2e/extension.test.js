@@ -5,7 +5,10 @@ const assert = require('node:assert/strict');
 const { launchExtension, mockOpenRouter, requests, setSettings, scanFromWorker, badgeText, highlighted } = require('../helpers/extension');
 
 const KEYED = { apiKey: 'sk-or-v1-e2e', model: 'test/mock-model' };
-const EXPECTED_TOP = ['high:Queue', 'high:O(log n)', 'high:2', 'high:7', 'high:Mars', 'high:Au', 'high:Jane Austen', 'high:x = 5', 'low:1'];
+const EXPECTED_TOP = [
+  'high:Queue', 'high:O(log n)', 'high:2', 'maybe:7', 'high:Mars', 'high:Au', 'high:Jane Austen', 'high:x = 5', 'low:1',
+  'filled:Paris', 'filled:6', 'suggested:Saturn', // text: drafts in empty fields; the typed answer is kept
+];
 
 let ext;
 test.before(async () => {
@@ -45,25 +48,27 @@ test('clicking the floating button highlights answers across frames — and neve
   const rangeText = await page.evaluate(() => [...CSS.highlights.get('qz-correct')].map((r) => r.toString().trim()));
   assert.deepEqual(rangeText, ['B) 100']);
 
-  // No auto-clicking: nothing checked, no dropdown changed.
+  // Choice questions are never auto-answered: nothing checked, no dropdown changed.
   assert.equal(await page.evaluate(() => document.querySelectorAll('input:checked').length), 0);
   assert.equal(await page.evaluate(() => document.querySelector('select[name=q5]').value), '');
   assert.equal(await edxFrame(page).evaluate(() => document.querySelectorAll('input:checked').length), 0);
 
-  // One request containing all 10 questions (9 top frame + 1 edX iframe), and nothing else.
+  // 13 questions (12 top frame + 1 edX iframe) in batches of 12 → two requests, nothing else.
   const reqs = await requests(sw);
-  assert.equal(reqs.length, 1);
+  assert.equal(reqs.length, 2);
   assert.equal(reqs[0].headers.Authorization, 'Bearer sk-or-v1-e2e');
   assert.equal(reqs[0].body.response_format.type, 'json_schema');
-  const user = reqs[0].body.messages.find((m) => m.role === 'user').content;
-  const payload = JSON.parse(user.slice(user.indexOf('{')));
-  assert.equal(payload.questions.length, 10);
-  assert.match(payload.questions[9].question, /Not Found/);
+  const users = reqs.map((r) => r.body.messages.find((m) => m.role === 'user').content);
+  const user = users.join('\n');
+  const sent = users.flatMap((u) => JSON.parse(u.slice(u.indexOf('{'))).questions);
+  assert.deepEqual(sent.map((q) => q.id), Array.from({ length: 13 }, (_, i) => `q${i + 1}`));
+  assert.match(sent[12].question, /Not Found/);
+  assert.deepEqual(sent[9].constraints, { max_length: 40, format: 'single line' });
   for (const banned of ['IGNORE-', 'HONEYPOT', 'OTHER-ORIGIN', 'traffic lights', 'Are you a human', 'Remember me', 'Analytics']) {
     assert.ok(!user.includes(banned), `request must not contain “${banned}”`);
   }
 
-  assert.equal(await badgeText(sw, 'https://ocw.mit.edu/*'), '10');
+  assert.equal(await badgeText(sw, 'https://ocw.mit.edu/*'), '13');
   assert.deepEqual(errors, []);
 
   // Clearing removes highlights in every frame.
@@ -73,6 +78,11 @@ test('clicking the floating button highlights answers across frames — and neve
   });
   assert.equal(await page.evaluate(() => document.querySelectorAll('[data-qz-highlight]').length), 0);
   assert.equal(await page.evaluate(() => CSS.highlights.size), 0);
+  assert.deepEqual(
+    await page.evaluate(() => ['answer_q10', 'answer_q11', 'answer_q12'].map((n) => document.querySelector(`[name=${n}]`).value)),
+    ['', '', 'Saturn'],
+    'unedited drafts are removed; user text stays'
+  );
   assert.equal(await edxFrame(page).evaluate(() => document.querySelectorAll('[data-qz-highlight]').length), 0);
   await page.close();
 });
@@ -123,9 +133,9 @@ test('injects on demand on sites outside the default list (popup / shortcut path
   assert.equal(await page.evaluate(() => Boolean(document.querySelector('quizzers-ui'))), false, 'not auto-injected');
 
   const { result } = await scanFromWorker(sw, 'https://openrouter.ai/quizzers-fixture*');
-  // 9 from the injected top frame + 1 from the embedded edX frame (declared match).
-  assert.equal(result.found, 10);
-  assert.equal(result.highlighted, 10);
+  // 12 from the injected top frame + 1 from the embedded edX frame (declared match).
+  assert.equal(result.found, 13);
+  assert.equal(result.highlighted, 13);
   assert.equal(await page.evaluate(() => Boolean(document.querySelector('quizzers-ui'))), true, 'UI mounted after injection');
   assert.deepEqual(await highlighted(page), EXPECTED_TOP);
   await page.close();

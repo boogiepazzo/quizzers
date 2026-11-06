@@ -1,10 +1,13 @@
 /*
  * Highlight rendering.
  *
- * Visual only: it sets a data attribute (styled by content.css), a tooltip,
- * and — for options that are bare text runs — a CSS Custom Highlight range.
- * It never clicks, focuses, checks, selects or dispatches events on page
- * elements, so the user always makes the final choice themselves.
+ * For choice questions it is visual only: a data attribute (styled by
+ * content.css), a tooltip and — for bare text runs — a CSS Custom Highlight
+ * range. It never clicks, focuses, checks or selects options.
+ *
+ * For short free-text questions it writes an editable draft into the field
+ * (only if the field is empty) and fires input/change so the page registers
+ * it. It never submits; the user reviews and edits the draft.
  *
  * A data attribute is used instead of a class because frameworks such as
  * React overwrite `className` on re-render but leave unknown attributes alone.
@@ -18,6 +21,7 @@
   const RANGE_NAMES = { high: 'qz-correct', low: 'qz-correct-low' };
 
   const marked = new Set();
+  const filled = new Map(); // field -> { value we wrote, original placeholder state }
   const originalTitles = new Map(); // element -> original title (null = none)
   let flashTimer = null;
   let flashed = null;
@@ -61,7 +65,7 @@
    * @returns {boolean} whether anything visible was marked
    */
   function markOption(option, info) {
-    const level = typeof info.confidence === 'number' && info.confidence < 0.5 ? 'low' : 'high';
+    const level = info.uncertain ? 'maybe' : typeof info.confidence === 'number' && info.confidence < 0.5 ? 'low' : 'high';
     if (option.optionEl) {
       // <select>: style the control and the <option> inside its popup.
       markElement(option.optionEl, level);
@@ -76,14 +80,51 @@
     return ok;
   }
 
+  /** Writes through the native setter so frameworks (React, Vue) see the change. */
+  function setFieldValue(field, value) {
+    const proto = field.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(field, value);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  /**
+   * Fills a short-answer field with a draft the user can edit. Only empty
+   * fields are filled (never overwrites what the user typed); nothing is
+   * submitted or focused.
+   * @returns {'filled'|'not-empty'|'gone'}
+   */
+  function fillText(field, value, info = {}) {
+    if (!field?.isConnected) return 'gone';
+    if (field.value.trim()) {
+      // Show the suggestion without touching what the user wrote.
+      markElement(field, 'suggested', `Quizzers suggests: ${value}${info.reasoning ? `\n${info.reasoning}` : ''}`);
+      return 'not-empty';
+    }
+    setFieldValue(field, value);
+    filled.set(field, value);
+    markElement(field, 'filled', `Draft answer filled by Quizzers — edit it as you like.${info.reasoning ? `\n${info.reasoning}` : ''}`);
+    return 'filled';
+  }
+
+  /** Removes drafts that the user hasn't edited. */
+  function clearFilled() {
+    for (const [field, value] of filled) {
+      if (field.isConnected && field.value === value) setFieldValue(field, '');
+    }
+    filled.clear();
+  }
+
   function clearFlash() {
     clearTimeout(flashTimer);
     if (flashed) flashed.removeAttribute(FLASH_ATTR);
     flashed = null;
   }
 
-  function clear() {
+  function clear({ keepDrafts = false } = {}) {
     clearFlash();
+    if (!keepDrafts) clearFilled();
+    else filled.clear();
     for (const el of marked) {
       el.removeAttribute(ATTR);
       if (originalTitles.has(el)) {
@@ -113,5 +154,5 @@
     return true;
   }
 
-  QZ.highlighter = Object.freeze({ markOption, clear, focus, ATTR });
+  QZ.highlighter = Object.freeze({ markOption, fillText, clear, focus, ATTR });
 })();

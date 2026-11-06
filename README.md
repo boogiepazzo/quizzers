@@ -2,7 +2,7 @@
 
 Quizzers finds the **visible** multiple-choice questions on a course page (MIT OpenCourseWare, Coursera, edX and others), sends them to an [OpenRouter](https://openrouter.ai) model, and **highlights** the suggested answer with a light green background (`#e6fffa`) and a green outline (`#38a169`).
 
-It only highlights. It never clicks, checks, selects, focuses or submits anything. You make the final choice.
+For choice questions it only highlights. For short free-text questions it fills in a brief, editable draft answer (you can turn this off). It never clicks, checks, selects or submits anything, so you make the final choice and edit or replace every draft.
 
 ![Highlighted options and the results panel](docs/screenshot.png)
 
@@ -15,6 +15,12 @@ It only highlights. It never clicks, checks, selects, focuses or submits anythin
   - `<select>` dropdowns
   - class-named containers (`.question` › `.choice`)
   - lettered options (`A) … B) …`) as lists, paragraphs or `<br>`-separated lines
+- **Select-all checkboxes.** The model judges each option independently. The panel says how many to pick ("Select 2 of 4"), and options it is unsure about get a yellow, dashed "maybe" highlight.
+- **Short free-text answers.** Visible text, number and textarea fields that read as questions get a brief draft answer that respects `maxlength` and number fields:
+  - Only **empty** fields are filled. If you already typed something, it is left alone and the suggestion is shown in a tooltip.
+  - Drafts get a green outline and can be edited freely. **Clear highlights** removes drafts you haven't edited.
+  - Personal-data fields (name, email, search, address, password forms…) and comment boxes that don't read as questions are never touched.
+  - Turn this off with "Fill short free-text answers" in settings to get a highlight-only suggestion instead.
 - **Readable math.** TeX is recovered from MathJax v2/v3, KaTeX and MathML, and image `alt` text is kept.
 - **Iframes.** Questions inside frames (for example edX units) are gathered into the same request.
 - **Anti-bot and verification guardrails.** CAPTCHA frames and widgets, bot-challenge pages, honeypot inputs, "leave this blank" prompts and hidden text are detected and never sent to the API (see [Guardrails](#guardrails)).
@@ -92,7 +98,7 @@ node scripts/serve-fixtures.js
 
 1. Open <http://localhost:8080/quiz.html>. It has 9 questions in different layouts, plus honeypots, a fake reCAPTCHA, a verification prompt, a login form and a cookie banner.
 2. Click the Quizzers toolbar icon, then **Scan this tab**. localhost isn't in the default site list, so the popup injects the scripts.
-3. Expect 9 highlighted questions. The panel should also say it ignored 4 hidden/honeypot items and 2 CAPTCHA/verification items.
+3. Expect 12 answered questions (9 choice questions highlighted, 2 empty text fields drafted, 1 typed answer left unchanged). The panel should also say it ignored 4 hidden/honeypot items and 2 CAPTCHA/verification items.
 
 To test on file:// pages, turn on **Allow access to file URLs** in the extension's details page.
 

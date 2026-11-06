@@ -646,14 +646,115 @@
     };
   }
 
+  /* ---------- strategy 6: short free-text answers ---------- */
+
+  // Fields that collect personal/account data or navigation, never quiz answers.
+  const NON_ANSWER_FIELD_RE =
+    /(^|[-_\s])(name|first|last|full[-_]?name|e-?mail|phone|tel|user(name)?|login|pass(word)?|search|query|q|address|street|city|zip|postal|country|coupon|promo|card|cvv|captcha|otp|code[-_]?verify|url|website|comment[-_]?author|subject)([-_\s]|$)/i;
+  const NON_ANSWER_AUTOCOMPLETE_RE = /^(name|given-name|family-name|email|tel|username|current-password|new-password|street-address|address-line\d|postal-code|country|cc-|one-time-code|organization|url)/i;
+
+  function isAnswerField(field) {
+    if (field.disabled || field.readOnly) return false;
+    if (field.tagName === 'INPUT') {
+      const type = (field.getAttribute('type') || 'text').toLowerCase();
+      if (!['text', 'number', ''].includes(type)) return false;
+    }
+    const desc = [field.name, field.id, field.getAttribute('aria-label'), field.getAttribute('placeholder')].filter(Boolean).join(' ');
+    if (NON_ANSWER_FIELD_RE.test(desc)) return false;
+    if (NON_ANSWER_AUTOCOMPLETE_RE.test(field.getAttribute('autocomplete') || '')) return false;
+    if (field.closest('[role="combobox"], [role="search"]') || field.getAttribute('role') === 'combobox') return false;
+    return true;
+  }
+
+  function collectTextFields(root, claimed) {
+    const out = [];
+    for (const field of root.querySelectorAll('input:not([type]), input[type="text" i], input[type="number" i], textarea')) {
+      if (isClaimed(field, claimed) || !isAnswerField(field)) continue;
+      const max = Number(field.getAttribute('maxlength'));
+      out.push({
+        source: 'text',
+        type: 'text',
+        field,
+        group: null,
+        options: [{ row: field, input: field }],
+        constraints: {
+          numeric: field.getAttribute('type') === 'number' || field.getAttribute('inputmode') === 'numeric' || field.getAttribute('inputmode') === 'decimal',
+          maxLength: Number.isFinite(max) && max > 0 ? max : null,
+          multiline: field.tagName === 'TEXTAREA',
+          placeholder: (field.getAttribute('placeholder') || '').slice(0, 120) || null,
+        },
+      });
+    }
+    return out;
+  }
+
+  /** A short-answer field: its label (or nearby text) is the question. */
+  function buildTextQuestion(cand, owner, ctx) {
+    const field = cand.field;
+    if (guards.looksLikeHoneypotInput(field)) {
+      ctx.skipped.honeypot++;
+      return null;
+    }
+    if (!guards.isRendered(field)) {
+      ctx.skipped.hidden++;
+      return null;
+    }
+    if (guards.isExcludedRegion(field)) return null;
+    if (guards.isCaptchaRelated(field)) {
+      ctx.skipped.captcha++;
+      return null;
+    }
+
+    const labels = labelElementsFor(field).filter((l) => !l.contains(field) || l.textContent.trim());
+    let stem = labels.map((l) => text.extract(l, { maxLength: LIMITS.STEM_CHARS })).filter(Boolean).join('\n');
+    if (!stem) stem = (field.getAttribute('aria-label') || '').trim();
+    const container = climb(field, owner, ctx);
+    const inQuestionContainer = Boolean(field.closest(ctx.containerSelector));
+    let context = container === field ? '' : text.extract(container, { exclude: new Set(labels), maxLength: LIMITS.CONTEXT_CHARS * 2 });
+    if (!stem) {
+      stem = context;
+      context = '';
+    }
+    if (meaningfulLength(stem) < 12 || !QUESTION_LIKE_RE.test(stem)) {
+      const prev = previousText(container, owner, ctx);
+      if (prev) stem = [prev, stem].filter(Boolean).join('\n');
+    }
+    stem = text.truncate(text.clean(stem), LIMITS.STEM_CHARS);
+    if (context && stem.includes(context)) context = '';
+    // Text boxes are everywhere (comments, feedback…): only keep ones that read as questions.
+    if (meaningfulLength(stem) < 8 || !(QUESTION_LIKE_RE.test(stem) || inQuestionContainer)) return null;
+
+    const reason = guards.classifyText(stem, []);
+    if (reason) {
+      ctx.skipped[reason]++;
+      return null;
+    }
+    if (ctx.scope === 'viewport' && !guards.intersectsViewport(field.getBoundingClientRect())) {
+      ctx.skipped.outsideViewport++;
+      return null;
+    }
+    return {
+      anchor: field,
+      container,
+      type: 'text',
+      source: 'text',
+      stem,
+      context: text.truncate(context, LIMITS.CONTEXT_CHARS),
+      options: cand.options,
+      optionTexts: [],
+      field,
+      constraints: cand.constraints,
+    };
+  }
+
   function containerSelectorFor(host) {
     const platform = PLATFORM_CONTAINERS.find((p) => p.host.test(host));
     return platform ? `${platform.selector}, ${GENERIC_CONTAINERS}` : GENERIC_CONTAINERS;
   }
 
   /**
-   * Finds the visible MCQs in this document.
-   * @param {{scope?: 'page'|'viewport'}} [opts]
+   * Finds the visible MCQs and short-answer questions in this document.
+   * @param {{scope?: 'page'|'viewport', includeText?: boolean}} [opts]
    * @returns {{blocked: string|null, skipped: Record<string, number>, questions: object[], entries: object[]}}
    */
   function findQuestions(opts = {}) {
@@ -680,6 +781,7 @@
     add(collectSelects(root, claimed));
     add(collectCustom(root, claimed));
     add(collectLettered(root, claimed));
+    if (opts.includeText !== false) add(collectTextFields(root, claimed));
 
     const ctx = {
       scope: opts.scope === 'viewport' ? 'viewport' : 'page',
@@ -693,7 +795,7 @@
     const built = [];
     candidates.forEach((cand, index) => {
       try {
-        const q = buildQuestion(cand, index, ctx);
+        const q = cand.source === 'text' ? buildTextQuestion(cand, index, ctx) : buildQuestion(cand, index, ctx);
         if (q) built.push(q);
       } catch (err) {
         console.debug('[Quizzers] skipped a candidate:', err);
@@ -719,8 +821,9 @@
         stem: q.stem,
         context: q.context,
         options: q.optionTexts,
+        constraints: q.constraints || undefined,
       })),
-      entries: unique.map((q) => ({ container: q.container, anchor: q.anchor, type: q.type, options: q.options })),
+      entries: unique.map((q) => ({ container: q.container, anchor: q.anchor, type: q.type, options: q.options, field: q.field || null })),
     };
   }
 

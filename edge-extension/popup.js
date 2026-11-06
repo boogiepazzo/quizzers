@@ -21,6 +21,7 @@
     loadModels: $('load-models'),
     modelsStatus: $('models-status'),
     showButton: $('show-button'),
+    fillText: $('fill-text'),
     testKey: $('test-key'),
     settingsStatus: $('settings-status'),
     shortcut: $('shortcut'),
@@ -105,6 +106,7 @@
       model: currentModel(),
       scanScope: els.form.querySelector('input[name="scope"]:checked')?.value === 'viewport' ? 'viewport' : 'page',
       showFloatingButton: els.showButton.checked,
+      fillTextAnswers: els.fillText.checked,
     };
   }
 
@@ -139,6 +141,7 @@
     const scope = els.form.querySelector(`input[name="scope"][value="${s.scanScope}"]`);
     if (scope) scope.checked = true;
     els.showButton.checked = s.showFloatingButton;
+    els.fillText.checked = s.fillTextAnswers;
 
     const commands = await chrome.commands.getAll().catch(() => []);
     const shortcut = commands.find((c) => c.name === 'scan-page')?.shortcut;
@@ -166,6 +169,7 @@
 
   // Preferences apply immediately (the floating button updates live).
   els.showButton.addEventListener('change', () => QZ.settings.save({ showFloatingButton: els.showButton.checked }));
+  els.fillText.addEventListener('change', () => QZ.settings.save({ fillTextAnswers: els.fillText.checked }));
   els.form.querySelectorAll('input[name="scope"]').forEach((radio) =>
     radio.addEventListener('change', () => QZ.settings.save({ scanScope: readForm().scanScope }))
   );

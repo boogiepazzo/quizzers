@@ -50,7 +50,12 @@ test('quiz fixture: finds every MCQ layout with clean stems and options', async 
     ['lettered-lines', 'unknown', '7. What is the boiling point of water at sea level, in degrees Celsius?', ['90', '100', '110']],
     ['custom', 'unknown', '8. Solve for x: $2x = 10$', ['x = 3', 'x = 5', 'x = 10']],
     ['native', 'single', '9. Evaluate $\\int_0^1 2x\\,dx$ .', ['0', '1', '2']],
+    ['text', 'text', '10. What is the capital of France?', []],
+    ['text', 'text', '11. How many sides does a hexagon have?', []],
+    ['text', 'text', '12. Which planet is the largest in our solar system?', []],
   ]);
+  assert.deepEqual(questions[9].constraints, { numeric: false, maxLength: 40, multiline: false, placeholder: null });
+  assert.equal(questions[10].constraints.numeric, true);
 });
 
 test('quiz fixture: honeypots, CAPTCHAs, verification prompts and hidden text never reach the payload', async () => {
@@ -60,7 +65,7 @@ test('quiz fixture: honeypots, CAPTCHAs, verification prompts and hidden text ne
 
   assert.deepEqual(skipped, { hidden: 2, honeypot: 2, captcha: 1, verification: 1, outsideViewport: 0 });
   const everything = JSON.stringify(questions);
-  for (const banned of ['IGNORE-', 'HONEYPOT', 'traffic lights', 'Are you a human', 'Remember me', 'Analytics', 'English', 'Smith', 'reinforces']) {
+  for (const banned of ['IGNORE-', 'HONEYPOT', 'traffic lights', 'Are you a human', 'Remember me', 'Analytics', 'English', 'Smith', 'reinforces', 'feedback', 'Search the course']) {
     assert.ok(!everything.includes(banned), `payload must not contain “${banned}”`);
   }
 });
@@ -69,7 +74,7 @@ test('viewport scope only returns questions currently on screen', async () => {
   const page = await open('quiz.html', { viewport: { width: 1000, height: 600 } });
   const { questions, skipped } = await scan(page, 'viewport');
   await page.close();
-  assert.ok(questions.length >= 1 && questions.length < 9, `got ${questions.length}`);
+  assert.ok(questions.length >= 1 && questions.length < 12, `got ${questions.length}`);
   assert.match(questions[0].stem, /FIFO/);
   assert.ok(skipped.outsideViewport > 0);
 });
@@ -149,4 +154,34 @@ test('highlighter marks and fully restores elements without touching their state
   assert.equal(result.during.checked, 0);
   assert.equal(result.during.selectValue, '');
   assert.deepEqual(result.after, { remaining: 0, title: 'original', selectTitle: false });
+});
+
+test('fillText drafts only empty fields, notifies the page, and Clear removes unedited drafts', async () => {
+  const page = await open('quiz.html');
+  const r = await page.evaluate(() => {
+    const { parser, highlighter } = globalThis.QZ;
+    const entries = parser.findQuestions({}).entries;
+    const empty = entries[9].field;
+    const typed = entries[11].field;
+    let events = 0;
+    empty.addEventListener('input', () => events++);
+    const out = { a: highlighter.fillText(empty, 'Paris'), b: highlighter.fillText(typed, 'Jupiter') };
+    out.values = [empty.value, typed.value, empty.getAttribute('data-qz-highlight'), typed.getAttribute('data-qz-highlight')];
+    out.events = events;
+    highlighter.clear();
+    out.afterClear = [empty.value, typed.value];
+    highlighter.fillText(empty, 'Paris');
+    empty.value = 'Paris, France'; // user edits the draft
+    highlighter.clear();
+    out.afterEdit = empty.value;
+    out.submitted = document.querySelectorAll('form').length && false;
+    return out;
+  });
+  await page.close();
+  assert.equal(r.a, 'filled');
+  assert.equal(r.b, 'not-empty');
+  assert.deepEqual(r.values, ['Paris', 'Saturn', 'filled', 'suggested']);
+  assert.equal(r.events, 1);
+  assert.deepEqual(r.afterClear, ['', 'Saturn']);
+  assert.equal(r.afterEdit, 'Paris, France', 'user edits are never reverted');
 });

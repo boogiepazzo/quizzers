@@ -129,7 +129,29 @@
       <div class="field"><input type="radio" name="q9" id="q9c" /><label for="q9c">2</label></div>
     </div>
 
+    <!-- Q10–Q12: short free-text answers -->
+    <div class="card" id="q10">
+      <label for="q10-input">10. What is the capital of France?</label>
+      <input id="q10-input" type="text" name="answer_q10" maxlength="40" />
+    </div>
+    <div class="card" id="q11">
+      <p>11. How many sides does a hexagon have?</p>
+      <input type="number" name="answer_q11" />
+    </div>
+    <div class="card" id="q12">
+      <label for="q12-input">12. Which planet is the largest in our solar system?</label>
+      <input id="q12-input" type="text" name="answer_q12" value="Saturn" />
+    </div>
+
     <!-- ===== Things that must be ignored ===== -->
+
+    <!-- Free-text fields that aren't questions -->
+    <div class="card">
+      <label for="feedback">Leave feedback for the instructor</label>
+      <textarea id="feedback" name="feedback"></textarea>
+      <input type="search" name="site-search" aria-label="Search the course" />
+      <input type="text" name="website" style="display: none" />
+    </div>
 
     <!-- H1: display:none question (hidden) -->
     <div class="card" style="display: none">

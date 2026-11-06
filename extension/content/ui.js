@@ -105,6 +105,8 @@
       background: var(--qz-mint); border: 1px solid var(--qz-green-2); border-radius: 6px;
     }
     .answer[data-level="low"] { border-style: dashed; }
+    .answer[data-level="maybe"] { border: 1px dashed #b7791f; background: var(--qz-warn-bg); }
+    .note-inline { margin-top: 5px; font-size: 12px; color: var(--qz-muted); }
     .letter { flex: none; font-weight: 700; color: var(--qz-green); }
     .answer-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .conf { flex: none; font-size: 11px; color: var(--qz-muted); }
@@ -140,7 +142,7 @@
         </header>
         <div class="status" role="status" aria-live="polite"></div>
         <ol class="list"></ol>
-        <p class="disclaimer">AI suggestions can be wrong. Quizzers only highlights — you pick the answer.</p>
+        <p class="disclaimer">AI suggestions can be wrong. Quizzers never clicks or submits — review every highlight and draft.</p>
         <footer class="foot">
           <button class="btn primary rescan" type="button">Scan again</button>
           <button class="btn clear" type="button">Clear highlights</button>
@@ -334,7 +336,7 @@
     } else if (s.phase === 'done') {
       const total = s.results?.length || 0;
       const highlighted = (s.results || []).filter((r) => r.status === 'highlighted').length;
-      line(total ? `Highlighted ${highlighted} of ${total} question${total === 1 ? '' : 's'}.` : s.message || 'No visible multiple-choice questions found.');
+      line(total ? `Answered ${highlighted} of ${total} question${total === 1 ? '' : 's'}.` : s.message || 'No visible multiple-choice questions found.');
       if (s.warning) {
         box.dataset.kind = 'warn';
         box.append(h('div', 'note', s.warning));
@@ -364,11 +366,27 @@
     q.addEventListener('click', () => handlers.onFocus?.(r));
     li.append(q);
 
-    if (r.status === 'highlighted' || (r.indices && r.indices.length && r.status !== 'unmatched')) {
+    if (r.type === 'text' && r.text) {
+      const row = h('div', 'answer');
+      row.dataset.level = typeof r.confidence === 'number' && r.confidence < 0.5 ? 'low' : 'high';
+      row.append(h('span', 'letter', '✎'), h('span', 'answer-text', r.text));
+      if (typeof r.confidence === 'number') row.append(h('span', 'conf', `${Math.round(r.confidence * 100)}%`));
+      li.append(row);
+      const notes = {
+        filled: 'Draft filled in — edit it before you submit.',
+        'not-empty': 'You already typed an answer, so it was left unchanged.',
+        suggested: 'Filling is off in settings; type it yourself if you agree.',
+      };
+      if (notes[r.textOutcome]) li.append(h('div', 'note-inline', notes[r.textOutcome]));
+      if (r.status === 'stale') li.append(h('div', 'warn', 'The field changed on the page — scan again.'));
+    } else if (r.status === 'highlighted' || (r.indices && r.indices.length && r.status !== 'unmatched')) {
       const low = typeof r.confidence === 'number' && r.confidence < 0.5;
+      if (r.type === 'multiple') {
+        li.append(h('div', 'note-inline', `Select ${r.indices.length} of ${r.options?.length || 0}${r.uncertain?.length ? ` · ${r.uncertain.length} uncertain (yellow)` : ''}`));
+      }
       for (const idx of r.indices || []) {
         const row = h('div', 'answer');
-        row.dataset.level = low ? 'low' : 'high';
+        row.dataset.level = r.uncertain?.includes(idx) ? 'maybe' : low ? 'low' : 'high';
         row.append(h('span', 'letter', `${LETTERS[idx] || idx + 1}.`), h('span', 'answer-text', r.options?.[idx] ?? ''));
         if (typeof r.confidence === 'number') row.append(h('span', 'conf', `${Math.round(r.confidence * 100)}%`));
         li.append(row);

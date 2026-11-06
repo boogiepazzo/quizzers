@@ -154,6 +154,7 @@ async function runScan(tabId, signal) {
     localId: q.localId,
     stem: q.stem,
     options: q.options,
+    type: q.type,
     status: 'pending',
     indices: [],
     confidence: null,
@@ -212,8 +213,10 @@ async function runScan(tabId, signal) {
       r.confidence = answer.confidence;
       r.reasoning = answer.reasoning;
       r.rawTexts = answer.rawTexts;
-      if (!answer.indices.length) {
-        r.status = 'unmatched';
+      r.uncertain = answer.uncertain;
+      r.text = answer.text;
+      if (q.type === 'text' ? !answer.text : !answer.indices.length) {
+        r.status = q.type === 'text' ? 'missing' : 'unmatched';
         continue;
       }
       const key = q.documentId || `frame:${q.frameId}`;
@@ -224,6 +227,9 @@ async function runScan(tabId, signal) {
         confidence: answer.confidence,
         reasoning: answer.reasoning,
         optionTexts: q.options,
+        uncertain: answer.uncertain,
+        text: answer.text,
+        fillText: settings.fillTextAnswers,
       });
     }
 
@@ -236,10 +242,13 @@ async function runScan(tabId, signal) {
       } catch {
         applied = []; // frame navigated away
       }
-      const byLocal = new Map(applied.map((a) => [a.localId, a.applied]));
+      const byLocal = new Map(applied.map((a) => [a.localId, a]));
       for (const item of doc.items) {
         const r = results.find((x) => x.localId === item.localId && (x.documentId || `frame:${x.frameId}`) === (doc.documentId || `frame:${doc.frameId}`));
-        if (r) r.status = byLocal.get(item.localId) ? 'highlighted' : 'stale';
+        if (!r) continue;
+        const outcome = byLocal.get(item.localId);
+        r.status = outcome?.applied ? 'highlighted' : 'stale';
+        if (outcome?.outcome) r.textOutcome = outcome.outcome; // filled | not-empty | suggested
       }
     }
   }

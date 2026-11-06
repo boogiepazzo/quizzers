@@ -16,7 +16,10 @@
     'For every question you receive, choose the correct option(s).',
     '',
     'Rules:',
-    '- type "single": exactly one option is correct. type "multiple": one or more options may be correct (select all that apply). type "unknown": infer from the wording.',
+    '- type "single": exactly one option is correct. type "unknown": infer from the wording.',
+    '- type "multiple" (select all that apply): judge EVERY option independently as true or false and include all that are correct, however many (one, several or all). "uncertain_indices" lists the chosen options you are least sure about (a subset of "correct_indices"; empty when confident).',
+    '- type "text" (short free-text answer): there are no options. Put the answer in "text_answer": as brief as the question allows (a word, number or short phrase; at most one or two sentences when an explanation is asked for), with no preamble, and respecting any "constraints" (numeric → digits only; max_length → never longer). Leave the index arrays empty.',
+    '- For non-text questions set "text_answer" to "".',
     '- Refer to options by the zero-based "index" given in the input, and copy each chosen option\'s text verbatim into "correct_texts" in the same order.',
     '- "confidence" is your probability from 0 to 1 that the selection is completely correct.',
     '- "reasoning" is one or two short sentences explaining why.',
@@ -24,7 +27,7 @@
     '- If a question cannot be answered from the information given, still give your best guess with a low confidence.',
     '',
     'Reply with JSON only, no prose and no code fences, shaped exactly like:',
-    '{"answers":[{"id":"q1","correct_indices":[2],"correct_texts":["<option text>"],"confidence":0.9,"reasoning":"<why>"}]}',
+    '{"answers":[{"id":"q1","correct_indices":[2],"correct_texts":["<option text>"],"uncertain_indices":[],"text_answer":"","confidence":0.9,"reasoning":"<why>"}]}',
     'Include exactly one entry per question id.',
   ].join('\n');
 
@@ -48,10 +51,16 @@
               items: { type: 'string' },
               description: 'Verbatim text of the correct option(s), same order as correct_indices.',
             },
+            uncertain_indices: {
+              type: 'array',
+              items: { type: 'integer' },
+              description: 'For select-all questions: options you are unsure about.',
+            },
+            text_answer: { type: 'string', description: 'Brief answer for type "text" questions; "" otherwise.' },
             confidence: { type: 'number', description: 'Probability (0-1) that the selection is correct.' },
             reasoning: { type: 'string', description: 'One or two short sentences.' },
           },
-          required: ['id', 'correct_indices', 'correct_texts', 'confidence', 'reasoning'],
+          required: ['id', 'correct_indices', 'correct_texts', 'uncertain_indices', 'text_answer', 'confidence', 'reasoning'],
           additionalProperties: false,
         },
       },
@@ -59,6 +68,28 @@
     required: ['answers'],
     additionalProperties: false,
   });
+
+  function textConstraints(c) {
+    const out = {};
+    if (c.numeric) out.numeric = true;
+    if (c.maxLength) out.max_length = c.maxLength;
+    out.format = c.multiline ? 'short paragraph allowed' : 'single line';
+    if (c.placeholder) out.placeholder_hint = c.placeholder;
+    return out;
+  }
+
+  /** Trims a free-text answer to what the field accepts. */
+  function cleanTextAnswer(value, constraints = {}) {
+    let t = String(value ?? '').trim().replace(/^["“']+|["”']+$/g, '').trim();
+    t = t.replace(/^(answer|the answer is)\s*[:\-]\s*/i, '');
+    if (!constraints.multiline) t = t.replace(/\s*\n+\s*/g, ' ');
+    if (constraints.numeric) {
+      const m = t.replace(/,/g, '').match(/-?\d+(\.\d+)?(e-?\d+)?/i);
+      t = m ? m[0] : '';
+    }
+    if (constraints.maxLength && t.length > constraints.maxLength) t = t.slice(0, constraints.maxLength).trimEnd();
+    return t;
+  }
 
   /**
    * @param {Array<{id: string, type: string, stem: string, context?: string, options: string[]}>} questions
@@ -72,7 +103,8 @@
         type: q.type || 'unknown',
         question: q.stem,
         context: q.context || undefined,
-        options: q.options.map((text, index) => ({ index, label: letter(index), text })),
+        options: q.type === 'text' ? undefined : q.options.map((text, index) => ({ index, label: letter(index), text })),
+        constraints: q.type === 'text' && q.constraints ? textConstraints(q.constraints) : undefined,
       })),
     };
     return [
@@ -229,6 +261,19 @@
       const question = byId.get(id);
       if (!question || out.has(id)) return;
 
+      if (question.type === 'text') {
+        const answerText = cleanTextAnswer(entry.text_answer ?? entry.answer ?? entry.correct_texts?.[0] ?? '', question.constraints || {});
+        out.set(id, {
+          indices: [],
+          uncertain: [],
+          text: answerText,
+          confidence: normalizeConfidence(entry.confidence),
+          reasoning: String(entry.reasoning ?? entry.explanation ?? '').trim().slice(0, 600),
+          method: answerText ? 'text-answer' : 'none',
+          rawTexts: [],
+        });
+        return;
+      }
       const n = question.options.length;
       const rawIndices = toArray(entry.correct_indices ?? entry.correct_index ?? entry.indices ?? entry.index)
         .map((v) => (typeof v === 'string' && /^[A-Za-z]$/.test(v.trim()) ? v.trim().toUpperCase().charCodeAt(0) - 65 : Number(v)))
@@ -263,8 +308,13 @@
       }
       if (question.type === 'single' && indices.length > 1) indices = indices.slice(0, 1);
 
+      const uncertain = [
+        ...new Set(toArray(entry.uncertain_indices).map(Number).filter((i) => Number.isInteger(i) && indices.includes(i))),
+      ];
       out.set(id, {
         indices: indices.sort((a, b) => a - b),
+        uncertain: question.type === 'single' ? [] : uncertain.sort((a, b) => a - b),
+        text: '',
         confidence: normalizeConfidence(entry.confidence),
         reasoning: String(entry.reasoning ?? entry.explanation ?? '').trim().slice(0, 600),
         method,
@@ -283,5 +333,6 @@
     normalizeAnswers,
     matchOptionText,
     normalizeText,
+    cleanTextAnswer,
   });
 })();

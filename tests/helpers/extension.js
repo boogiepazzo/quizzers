@@ -21,6 +21,11 @@ const ANSWER_KEY = [
   ['Evaluate', ['1']],
   ['Not Found', ['404']],
 ];
+const TEXT_KEY = [
+  ['capital of France', 'Paris'],
+  ['hexagon', '6'],
+  ['largest in our solar system', 'Jupiter'],
+];
 
 async function launchExtension() {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quizzers-e2e-'));
@@ -65,7 +70,7 @@ async function launchExtension() {
  */
 async function mockOpenRouter(sw, chatBehaviour = 'answer') {
   await sw.evaluate(
-    ({ key, behaviour }) => {
+    ({ key, textKey, behaviour }) => {
       self.__qzRequests = [];
       self.fetch = async (url, init = {}) => {
         const href = String(url);
@@ -87,6 +92,10 @@ async function mockOpenRouter(sw, chatBehaviour = 'answer') {
         const user = body.messages.find((m) => m.role === 'user').content;
         const payload = JSON.parse(user.slice(user.indexOf('{')));
         const answers = payload.questions.map((q) => {
+          if (q.type === 'text') {
+            const t = textKey.find(([phrase]) => q.question.includes(phrase));
+            return { id: q.id, correct_indices: [], correct_texts: [], uncertain_indices: [], text_answer: t ? t[1] : '', confidence: 0.9, reasoning: `Mock reasoning for ${q.id}.` };
+          }
           const hit = key.find(([phrase]) => q.question.includes(phrase));
           const texts = hit ? hit[1] : [];
           const lowConfidence = q.question.includes('Evaluate');
@@ -95,6 +104,8 @@ async function mockOpenRouter(sw, chatBehaviour = 'answer') {
             // Q7 deliberately answers with a 1-based index to exercise text matching.
             correct_indices: texts.map((t) => q.options.findIndex((o) => o.text === t) + (q.question.includes('boiling') ? 1 : 0)),
             correct_texts: texts,
+            uncertain_indices: q.question.includes('prime') ? [q.options.findIndex((o) => o.text === '7')] : [],
+            text_answer: '',
             confidence: lowConfidence ? 0.4 : 0.93,
             reasoning: `Mock reasoning for ${q.id}.`,
           };
@@ -105,7 +116,7 @@ async function mockOpenRouter(sw, chatBehaviour = 'answer') {
         });
       };
     },
-    { key: ANSWER_KEY, behaviour: chatBehaviour }
+    { key: ANSWER_KEY, textKey: TEXT_KEY, behaviour: chatBehaviour }
   );
 }
 
@@ -141,7 +152,8 @@ const highlighted = (frame) =>
     Array.from(document.querySelectorAll('[data-qz-highlight]'))
       .filter((el) => el.tagName !== 'OPTION')
       .map((el) => {
-        const label = el.tagName === 'SELECT' ? el.querySelector('option[data-qz-highlight]')?.text || '' : el.textContent;
+        const label =
+          el.tagName === 'SELECT' ? el.querySelector('option[data-qz-highlight]')?.text || '' : /^(INPUT|TEXTAREA)$/.test(el.tagName) ? el.value : el.textContent;
         return `${el.getAttribute('data-qz-highlight')}:${label.trim()}`;
       })
   );

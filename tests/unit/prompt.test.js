@@ -62,7 +62,7 @@ test('matchOptionText handles letters, formatting differences and near-duplicate
 test('normalizeAnswers: indices and texts that agree', () => {
   const raw = { answers: [{ id: 'q1', correct_indices: [1], correct_texts: ['Queue'], confidence: 0.9, reasoning: 'FIFO.' }] };
   const out = normalizeAnswers(raw, questions);
-  assert.deepEqual(out.get('q1'), { indices: [1], confidence: 0.9, reasoning: 'FIFO.', method: 'index+text', rawTexts: ['Queue'] });
+  assert.deepEqual(out.get('q1'), { indices: [1], uncertain: [], text: '', confidence: 0.9, reasoning: 'FIFO.', method: 'index+text', rawTexts: ['Queue'] });
 });
 
 test('normalizeAnswers: corrects 1-based indices using the option text', () => {
@@ -100,4 +100,35 @@ test('normalizeAnswers: accepts keyed objects and out-of-range indices', () => {
   const none = normalizeAnswers({ answers: [{ id: 'q3', correct_indices: [9], correct_texts: ['nothing like it'] }] }, questions);
   assert.deepEqual(none.get('q3').indices, []);
   assert.equal(none.get('q3').method, 'none');
+});
+
+test('select-all: uncertain options are a subset of the selection', () => {
+  const raw = { answers: [{ id: 'q2', correct_indices: [0, 2], correct_texts: ['2', '7'], uncertain_indices: [2, 3], confidence: 0.7, reasoning: '' }] };
+  const a = normalizeAnswers(raw, questions).get('q2');
+  assert.deepEqual(a.indices, [0, 2]);
+  assert.deepEqual(a.uncertain, [2], 'index 3 was not selected, so it is dropped');
+});
+
+test('text questions: payload carries constraints and answers are kept brief and valid', () => {
+  const textQs = [
+    { id: 't1', type: 'text', stem: 'Capital of France?', options: [], constraints: { maxLength: 10, multiline: false } },
+    { id: 't2', type: 'text', stem: 'Sides of a hexagon?', options: [], constraints: { numeric: true } },
+  ];
+  const user = buildMessages(textQs)[1].content;
+  const payload = JSON.parse(user.slice(user.indexOf('{')));
+  assert.equal(payload.questions[0].options, undefined);
+  assert.deepEqual(payload.questions[0].constraints, { max_length: 10, format: 'single line' });
+  assert.equal(payload.questions[1].constraints.numeric, true);
+  assert.match(SYSTEM_PROMPT, /text_answer/);
+
+  const out = normalizeAnswers(
+    { answers: [
+      { id: 't1', correct_indices: [], correct_texts: [], text_answer: '"Answer: Paris\nis the capital"', confidence: 0.95, reasoning: 'x' },
+      { id: 't2', correct_indices: [], correct_texts: [], text_answer: 'A hexagon has 6 sides.', confidence: 0.99, reasoning: 'y' },
+    ] },
+    textQs
+  );
+  assert.equal(out.get('t1').text, 'Paris is t', 'single line, quotes/preamble stripped, max length enforced');
+  assert.equal(out.get('t2').text, '6', 'numeric fields get just the number');
+  assert.deepEqual(out.get('t2').indices, []);
 });

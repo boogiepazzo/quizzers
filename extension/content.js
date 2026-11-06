@@ -49,6 +49,15 @@
       return items.map((item) => {
         const entry = lastScan.entries[item.localId];
         if (!entry) return { localId: item.localId, applied: false, reason: 'stale' };
+        if (entry.type === 'text') {
+          if (!item.text) return { localId: item.localId, applied: false, reason: 'empty' };
+          if (!item.fillText) {
+            QZ.highlighter.markOption({ row: entry.field }, { confidence: item.confidence, reasoning: `Suggested answer: ${item.text}` });
+            return { localId: item.localId, applied: true, outcome: 'suggested' };
+          }
+          const outcome = QZ.highlighter.fillText(entry.field, item.text, { reasoning: item.reasoning });
+          return { localId: item.localId, applied: outcome !== 'gone', outcome, reason: outcome === 'gone' ? 'stale' : null };
+        }
         let applied = false;
         for (const index of item.indices) {
           const option = entry.options[index];
@@ -59,6 +68,7 @@
               confidence: item.confidence,
               reasoning: item.reasoning,
               optionText: item.optionTexts?.[index],
+              uncertain: item.uncertain?.includes(index),
             }) || applied;
         }
         return { localId: item.localId, applied, reason: applied ? null : 'stale' };

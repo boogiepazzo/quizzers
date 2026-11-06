@@ -13,6 +13,7 @@
     model: QZ.config.DEFAULT_MODEL,
     scanScope: 'page', // 'page' | 'viewport'
     showFloatingButton: true,
+    fillTextAnswers: true, // write editable drafts into empty short-answer fields
     buttonOffset: null, // px from the bottom of the viewport; null = default
     modelCache: null, // { fetchedAt, models: [{id, name, structured}] }
   });
@@ -28,6 +29,7 @@
     out.model = String(out.model || '').trim() || DEFAULTS.model;
     out.scanScope = out.scanScope === 'viewport' ? 'viewport' : 'page';
     out.showFloatingButton = out.showFloatingButton !== false;
+    out.fillTextAnswers = out.fillTextAnswers !== false;
     out.buttonOffset = Number.isFinite(out.buttonOffset) ? out.buttonOffset : null;
     return out;
   }

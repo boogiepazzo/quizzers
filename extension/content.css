@@ -17,6 +17,28 @@
   outline-style: dashed !important;
 }
 
+/* Select-all option the model is unsure about. */
+[data-qz-highlight='maybe'] {
+  background-color: #fefcbf !important;
+  outline: 2px dashed #b7791f !important;
+}
+
+/* Short-answer field holding an editable Quizzers draft. */
+input[data-qz-highlight='filled'],
+textarea[data-qz-highlight='filled'],
+input[data-qz-highlight='suggested'],
+textarea[data-qz-highlight='suggested'] {
+  background-color: #e6fffa !important;
+  outline: 2px solid #38a169 !important;
+  outline-offset: 1px !important;
+}
+
+input[data-qz-highlight='suggested'],
+textarea[data-qz-highlight='suggested'] {
+  background-color: inherit !important;
+  outline-style: dashed !important;
+}
+
 /* Bare radio/checkbox inputs only get the outline. */
 input[data-qz-highlight] {
   outline-offset: 1px !important;
